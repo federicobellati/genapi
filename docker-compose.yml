@@ -1,0 +1,44 @@
+##################################################
+########### --- GENAPI FASTAPI ---  ##############
+#
+# 
+#
+# Last revision - Federico Bellati - 18/11/2024
+#
+#version: "3.9"
+
+services:
+  genapi:
+    container_name: ${PYTHON_GENAPI_CONTAINER_NAME}
+    hostname: ${PYTHON_GENAPI_CONTAINER_NAME}
+    image: python-${PYTHON_GENAPI_CONTAINER_NAME}:${PYTHON_VERSION}
+    build:
+      context: ./dockerfiles/python-fastapi
+      args:
+        VERSION: ${PYTHON_VERSION}
+        USER_ID: ${USER_ID:-0}
+        GROUP_ID: ${GROUP_ID:-0}
+        USER_NAME: ${PYTHON_USER_NAME}
+        GROUP_NAME: ${PYTHON_GROUP_NAME}
+        PYTHON_CONTAINER_PORT: 8000
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 10m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/status/"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+    networks:
+      - service-network
+
+networks:
+  service-network:
+    driver: bridge
+    name: ${NETWORK}
+    external: true
