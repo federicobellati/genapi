@@ -51,7 +51,10 @@ COPY --chown=python:python ./copyfs/home/python/app/ /home/python/app/
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
+ARG PYTHON_CONTAINER_PORT
 EXPOSE ${PYTHON_CONTAINER_PORT}
+CMD ["python", "main.py"]
 
 ### --------------------------------------- ###
 ###############################################
+
