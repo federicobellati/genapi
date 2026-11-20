@@ -9,6 +9,7 @@ Gli endpoint sono definiti esclusivamente in `endpoints.py`; `local_link_bot.py`
 - `GET /status` o `/status/`: `{"message":"pong"}`; non interroga il modello.
 - `GET /policies`: elenco per il menu della futura pagina web, inizialmente solo `ismar`.
 - `POST /local-link-bot`: riceve esclusivamente `url` e `policy`, restituisce direttamente il report come `text/markdown; charset=utf-8`, con nome di download `report.md`.
+- `POST /alvise-graph/query`: riceve esclusivamente `question`, interroga tramite Hermes il corpus Graphify Alvise Benetazzo e restituisce `text/markdown; charset=utf-8`, con nome di download `answer.md`.
 - `GET /docs`: documentazione interattiva di FastAPI, utile per le prime prove prima di sviluppare l'interfaccia separata.
 
 Corpo della richiesta:
@@ -36,6 +37,24 @@ Ogni richiesta scarica una sola risorsa e invia una sola richiesta al modello co
 Errori: 413 documento troppo grande o oltre il contesto del modello (con conteggio dei token segnalato dal server); 415 formato non testuale; 422 input non valido o documento vuoto; 502 errore della fonte o del modello, risposta non valida o troncata; 504 timeout. Anche il timeout del reverse proxy dovrà consentire il completamento dell'analisi.
 
 La pagina ERDDAP di esempio contiene anche JSON-LD con 442 riferimenti a file, che vengono conservati: nella prova il prompt completo ripulito richiede 83.270 token, oltre i 65.536 configurati sul server LLM. Per questa pagina occorre aumentare il contesto del server o fornire una rappresentazione più piccola del documento. L'applicazione segnala l'errore senza tagliare silenziosamente i metadati o cambiare l'URL.
+
+## Query al corpus Alvise Benetazzo
+
+```json
+{"question":"What is the Impact of surface waves on ocean circulation?"}
+```
+
+Inviare questo JSON a `/alvise-graph/query`. La pagina legge il risultato con `response.text()`. Domanda obbligatoria, da 1 a 4000 caratteri dopo la rimozione degli spazi iniziali/finali; i campi aggiuntivi sono rifiutati con 422. L'endpoint usa il CORS già configurato.
+
+`alvise_graph.py` conserva lato server il prompt di attivazione `graphify query:` e le sei regole del corpus, con lettura dei Markdown sorgente dello stesso corpus autorizzata dall'utente. Il percorso `/opt/data/home/alvise_benetazzo_articles_MD/graphify-out/` è fisso e si riferisce al filesystem di Hermes: GENAPI non deve montare o leggere direttamente il grafo. Hermes deve interrogare prima questo grafo e può leggere i relativi `.md` sotto `/opt/data/home/alvise_benetazzo_articles_MD/`, anche fuori da `graphify-out/`, identificandoli tramite la provenienza registrata nel grafo. Restano esclusi memoria, altre sessioni, web e altri corpus. Ogni richiesta invia una sola domanda a Hermes, senza cronologia o sessioni fornite dal client; skill e strumenti sono eseguiti da Hermes. Modello configurato nel servizio invariato; reasoning richiesto disattivato per questa richiesta, senza modificare le impostazioni Hermes.
+
+La risposta deve distinguere EXTRACTED/INFERRED, citare i file .md del corpus e usare `Not found in the Alvise Benettazzo corpus` per informazioni assenti. Le regole sono istruzioni all'agente: il prompt fisso e la validazione dell'input non costituiscono un isolamento dei suoi strumenti o del filesystem. L'isolamento effettivo dipende dalla configurazione Hermes; GENAPI non verifica automaticamente la provenienza di ciascuna affermazione.
+
+Nella prima prova del 20/11/2026 Hermes ha eseguito anche una ricerca senza percorso, che includeva la memoria dell'agente: il requisito di isolamento non è convalidato. La successiva autorizzazione ai Markdown dello stesso corpus supera il precedente vincolo alla sola directory `graphify-out/`; leggere quei documenti non equivale a usare fonti estranee. Il prompt aggiornato non è stato sottoposto a una nuova prova live. Per garantire l'isolamento occorrono accessi realmente limitati in Hermes.
+
+Impostare `HERMES_API_KEY` nell'ambiente del processo/container GENAPI, mai nella pagina web. Nessuna chiave è inclusa nel codice. Base predefinita `http://docker03.ve.ismar.cnr.it:8642/v1`, sovrascrivibile con `HERMES_BASE_URL`; timeout predefinito 900 secondi (15 minuti), sovrascrivibile con `HERMES_TIMEOUT`, per consentire le risposte di circa 11 minuti osservate nelle prove. Un valore in un file `.env` di Compose deve essere passato esplicitamente al servizio per essere disponibile al processo. La configurazione Docker esistente non è stata modificata.
+
+Errori: 422 input non valido; 503 chiave Hermes assente; 502 errore Hermes o risposta vuota, malformata o incompleta; 504 timeout. Configurare anche il timeout del reverse proxy per richieste lunghe. Il timeout HTTP non garantisce l'annullamento del lavoro già avviato su Hermes; nessun tentativo automatico di ripetizione.
 
 ## Verifiche
 
